@@ -1,0 +1,16 @@
+# nft-blocker configuration
+password: "changeme"
+listen: ":8081"
+interface: "br_lan"
+state_file: "state.yaml"
+
+groups:
+  kids:
+    display_name: "Kids Devices"
+    mac_addresses:
+      - "2C:98:11:1F:46:3D"
+      - "AA:BB:CC:DD:EE:FF"
+  guests:
+    display_name: "Guest Network"
+    mac_addresses:
+      - "11:22:33:44:55:66"

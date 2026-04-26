@@ -1,0 +1,13 @@
+[Unit]
+Description=NFT Blocker - Internet Access Control
+After=network.target nftables.service
+
+[Service]
+Type=simple
+ExecStart=/opt/nft-blocker/nft-blocker -config /opt/nft-blocker/config.yaml
+WorkingDirectory=/opt/nft-blocker
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
