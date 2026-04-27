@@ -16,7 +16,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
-	log.Printf("Loaded config: %d groups, listen=%s, interface=%s", len(cfg.Groups), cfg.Listen, cfg.Interface)
+	log.Printf("Loaded config: %d groups, listen=%s, interfaces=%v", len(cfg.Groups), cfg.Listen, cfg.Interfaces)
 
 	// Load persisted state
 	state := NewState(cfg.StateFile)
@@ -40,11 +40,36 @@ func main() {
 	snap := state.Snapshot()
 
 	// Restore block-all
-	if snap.BlockAll {
-		if err := BlockAllTraffic(cfg.Interface); err != nil {
+	if snap.BlockAll.Blocked {
+		if err := BlockAllTraffic(cfg.Interfaces); err != nil {
 			log.Printf("WARNING: failed to restore block-all: %v", err)
 		} else {
 			log.Println("Restored: block-all is active")
+		}
+
+		// If timed, schedule auto-unblock
+		if snap.BlockAll.BlockedUntil != nil && !snap.BlockAll.BlockedUntil.IsZero() {
+			remaining := time.Until(*snap.BlockAll.BlockedUntil)
+			if remaining <= 0 {
+				log.Printf("Block-all timer already expired, unblocking")
+				if err := UnblockAllTraffic(); err != nil {
+					log.Printf("WARNING: failed to unblock expired block-all: %v", err)
+				}
+				state.SetBlockAll(false, nil)
+				_ = state.Save()
+			} else {
+				timers.Start("__block_all__", remaining, func() {
+					log.Printf("Block-all timer expired, unblocking")
+					if err := UnblockAllTraffic(); err != nil {
+						log.Printf("ERROR auto-unblocking all traffic: %v", err)
+					}
+					srv.state.SetBlockAll(false, nil)
+					if err := srv.state.Save(); err != nil {
+						log.Printf("ERROR saving state: %v", err)
+					}
+				})
+				log.Printf("Restored block-all timer: %v remaining", remaining.Round(time.Second))
+			}
 		}
 	}
 

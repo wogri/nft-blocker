@@ -151,8 +151,10 @@ type GroupStatusResponse struct {
 }
 
 type StatusResponse struct {
-	Groups   []GroupStatusResponse `json:"groups"`
-	BlockAll bool                  `json:"block_all"`
+	Groups        []GroupStatusResponse `json:"groups"`
+	BlockAll      bool                  `json:"block_all"`
+	BlockAllUntil *string               `json:"block_all_until,omitempty"`
+	Interfaces    []string              `json:"interfaces"`
 }
 
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
@@ -163,7 +165,12 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 
 	snap := s.state.Snapshot()
 	resp := StatusResponse{
-		BlockAll: snap.BlockAll,
+		BlockAll:   snap.BlockAll.Blocked,
+		Interfaces: s.cfg.Interfaces,
+	}
+	if snap.BlockAll.BlockedUntil != nil && !snap.BlockAll.BlockedUntil.IsZero() {
+		t := snap.BlockAll.BlockedUntil.Format(time.RFC3339)
+		resp.BlockAllUntil = &t
 	}
 
 	for name, group := range s.cfg.Groups {
@@ -294,18 +301,51 @@ func (s *Server) handleBlockAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := BlockAllTraffic(s.cfg.Interface); err != nil {
+	var req struct {
+		Duration string `json:"duration"` // "15m", "30m", "1h", "24h", "forever"
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		// Allow empty body (defaults to forever)
+		req.Duration = "forever"
+	}
+
+	// Cancel any existing block-all timer
+	s.timers.Cancel("__block_all__")
+
+	if err := BlockAllTraffic(s.cfg.Interfaces); err != nil {
 		log.Printf("ERROR blocking all traffic: %v", err)
 		http.Error(w, fmt.Sprintf(`{"error":"nftables: %s"}`, err), http.StatusInternalServerError)
 		return
 	}
 
-	s.state.SetBlockAll(true)
+	var until *time.Time
+	if req.Duration != "forever" && req.Duration != "" {
+		dur, err := time.ParseDuration(req.Duration)
+		if err != nil {
+			http.Error(w, `{"error":"invalid duration"}`, http.StatusBadRequest)
+			return
+		}
+		t := time.Now().Add(dur)
+		until = &t
+
+		s.timers.Start("__block_all__", dur, func() {
+			log.Printf("Block-all timer expired, unblocking")
+			if err := UnblockAllTraffic(); err != nil {
+				log.Printf("ERROR auto-unblocking all traffic: %v", err)
+			}
+			s.state.SetBlockAll(false, nil)
+			if err := s.state.Save(); err != nil {
+				log.Printf("ERROR saving state: %v", err)
+			}
+		})
+	}
+
+	s.state.SetBlockAll(true, until)
 	if err := s.state.Save(); err != nil {
 		log.Printf("ERROR saving state: %v", err)
 	}
 
-	log.Printf("Blocked all traffic on %s", s.cfg.Interface)
+	log.Printf("Blocked all traffic on %v (duration: %s)", s.cfg.Interfaces, req.Duration)
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprint(w, `{"ok":true}`)
 }
@@ -316,13 +356,15 @@ func (s *Server) handleUnblockAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.timers.Cancel("__block_all__")
+
 	if err := UnblockAllTraffic(); err != nil {
 		log.Printf("ERROR unblocking all traffic: %v", err)
 		http.Error(w, fmt.Sprintf(`{"error":"nftables: %s"}`, err), http.StatusInternalServerError)
 		return
 	}
 
-	s.state.SetBlockAll(false)
+	s.state.SetBlockAll(false, nil)
 	if err := s.state.Save(); err != nil {
 		log.Printf("ERROR saving state: %v", err)
 	}

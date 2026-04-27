@@ -80,10 +80,17 @@ func UnblockGroup(groupName string) error {
 	return runNft("flush", "set", "inet", "nft_blocker", fmt.Sprintf("group_%s", groupName))
 }
 
-// BlockAllTraffic adds the configured interface to the blocked_ifaces set.
-func BlockAllTraffic(iface string) error {
+// BlockAllTraffic adds the configured interfaces to the blocked_ifaces set.
+func BlockAllTraffic(ifaces []string) error {
+	if len(ifaces) == 0 {
+		return nil
+	}
+	quoted := make([]string, len(ifaces))
+	for i, iface := range ifaces {
+		quoted[i] = fmt.Sprintf("%q", iface)
+	}
 	return runNft("add", "element", "inet", "nft_blocker", "blocked_ifaces",
-		fmt.Sprintf("{ %q }", iface))
+		fmt.Sprintf("{ %s }", strings.Join(quoted, ", ")))
 }
 
 // UnblockAllTraffic flushes the blocked_ifaces set.

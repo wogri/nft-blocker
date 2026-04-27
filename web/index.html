@@ -216,7 +216,7 @@
 <!-- LOGIN VIEW -->
 <div id="login-view">
   <div class="login-card">
-    <h1>🔒 NFT Blocker</h1>
+    <h1>🔒 NFT Blocker by @wogri</h1>
     <p>Enter the admin password to continue</p>
     <div class="error" id="login-error"></div>
     <input type="password" id="login-password" placeholder="Password" autofocus>
@@ -228,7 +228,7 @@
 <div id="dashboard-view">
   <div class="container">
     <header>
-      <h1>🛡️ NFT Blocker</h1>
+      <h1>🛡️ NFT Blocker by @wogri</h1>
       <span id="refresh-indicator" style="color:var(--text-muted);font-size:0.75rem"></span>
     </header>
 
@@ -238,9 +238,22 @@
         <div class="label">Block All Internet</div>
         <div class="sublabel" id="block-all-iface"></div>
       </div>
-      <div style="display:flex;gap:0.5rem;align-items:center">
+      <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
+        <span id="block-all-countdown" class="countdown"></span>
         <span id="block-all-badge"></span>
-        <button class="btn btn-red" id="block-all-btn" onclick="toggleBlockAll()">Block All</button>
+        <select id="block-all-dur">
+          <option value="15m">15 min</option>
+          <option value="30m">30 min</option>
+          <option value="1h" selected>1 hour</option>
+          <option value="2h">2 hours</option>
+          <option value="4h">4 hours</option>
+          <option value="8h">8 hours</option>
+          <option value="12h">12 hours</option>
+          <option value="24h">1 day</option>
+          <option value="forever">Forever</option>
+        </select>
+        <button class="btn btn-red" id="block-all-btn" onclick="doBlockAll()">Block All</button>
+        <button class="btn btn-green" id="unblock-all-btn" onclick="doUnblockAll()" style="display:none">Unblock All</button>
       </div>
     </div>
 
@@ -322,13 +335,37 @@ function renderDashboard() {
   // Block all banner
   const banner = document.getElementById('block-all-banner');
   const badge = document.getElementById('block-all-badge');
-  const btn = document.getElementById('block-all-btn');
+  const blockBtn = document.getElementById('block-all-btn');
+  const unblockBtn = document.getElementById('unblock-all-btn');
+  const blockAllDur = document.getElementById('block-all-dur');
+  const blockAllCountdown = document.getElementById('block-all-countdown');
+  const ifaceEl = document.getElementById('block-all-iface');
+
   banner.className = 'block-all-banner' + (statusData.block_all ? ' active' : '');
   badge.innerHTML = statusData.block_all
     ? '<span class="badge badge-blocked">BLOCKED</span>'
     : '<span class="badge badge-ok">ACTIVE</span>';
-  btn.textContent = statusData.block_all ? 'Unblock All' : 'Block All';
-  btn.className = statusData.block_all ? 'btn btn-green' : 'btn btn-red';
+
+  if (statusData.interfaces) {
+    ifaceEl.textContent = 'Interfaces: ' + statusData.interfaces.join(', ');
+  }
+
+  if (statusData.block_all) {
+    blockBtn.style.display = 'none';
+    blockAllDur.style.display = 'none';
+    unblockBtn.style.display = '';
+    if (statusData.block_all_until) {
+      const remaining = new Date(statusData.block_all_until) - Date.now();
+      blockAllCountdown.textContent = remaining > 0 ? formatDuration(remaining) : 'Expiring...';
+    } else {
+      blockAllCountdown.textContent = 'Forever';
+    }
+  } else {
+    blockBtn.style.display = '';
+    blockAllDur.style.display = '';
+    unblockBtn.style.display = 'none';
+    blockAllCountdown.textContent = '';
+  }
 
   // Groups
   const container = document.getElementById('groups-container');
@@ -422,11 +459,19 @@ async function unblockGroup(name) {
   } catch (e) { showToast(e.message, true); }
 }
 
-async function toggleBlockAll() {
-  const isBlocked = statusData && statusData.block_all;
+async function doBlockAll() {
+  const dur = document.getElementById('block-all-dur').value;
   try {
-    await api(isBlocked ? '/api/unblock-all' : '/api/block-all', 'POST');
-    showToast(isBlocked ? 'All traffic unblocked' : 'All traffic blocked');
+    await api('/api/block-all', 'POST', { duration: dur });
+    showToast('All traffic blocked');
+    refreshStatus();
+  } catch (e) { showToast(e.message, true); }
+}
+
+async function doUnblockAll() {
+  try {
+    await api('/api/unblock-all', 'POST');
+    showToast('All traffic unblocked');
     refreshStatus();
   } catch (e) { showToast(e.message, true); }
 }

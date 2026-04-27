@@ -1,7 +1,8 @@
 # nft-blocker configuration
 password: "changeme"
 listen: ":8081"
-interface: "br_lan"
+interfaces:
+  - "br_lan"
 state_file: "state.yaml"
 
 groups:

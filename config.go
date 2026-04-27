@@ -13,11 +13,11 @@ type Group struct {
 }
 
 type Config struct {
-	Password  string           `yaml:"password"`
-	Listen    string           `yaml:"listen"`
-	Interface string           `yaml:"interface"`
-	StateFile string           `yaml:"state_file"`
-	Groups    map[string]Group `yaml:"groups"`
+	Password   string           `yaml:"password"`
+	Listen     string           `yaml:"listen"`
+	Interfaces []string         `yaml:"interfaces"`
+	StateFile  string           `yaml:"state_file"`
+	Groups     map[string]Group `yaml:"groups"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -35,8 +35,8 @@ func LoadConfig(path string) (*Config, error) {
 	if cfg.Listen == "" {
 		cfg.Listen = ":8081"
 	}
-	if cfg.Interface == "" {
-		cfg.Interface = "br_lan"
+	if len(cfg.Interfaces) == 0 {
+		cfg.Interfaces = []string{"br_lan"}
 	}
 	if cfg.StateFile == "" {
 		cfg.StateFile = "state.yaml"

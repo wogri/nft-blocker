@@ -1,10 +1,16 @@
 # nft-blocker
 
-A lightweight Go service that dynamically blocks internet access for groups of devices using nftables named sets. It provides a sleek web UI for managing blocks with timed or permanent durations.
+A lightweight Go service that dynamically blocks internet access for groups of devices using nftables named sets. It provides a web UI for managing blocks with timed or permanent durations.
+
+This is being used in real life to block internet access of kids devices if they don't do their homework. 
+
+Or even the whole family if it's dinner time. No internet, no troubles in the family.
+
+It requires a linux router.
 
 ## Features
 
-- **Group-based blocking**: Define groups of MAC addresses (e.g. "Kids Devices", "Guest Network") and block/unblock them with one click
+- **Group-based blocking**: Define groups of MAC addresses (e.g. "Kids Devices", "Jon Doe's devices", "Guest Network") and block/unblock them with one click
 - **Timed blocks**: Block a group for 15 minutes, 1 hour, 2 hours, 12 hours, or forever
 - **Block all traffic**: Emergency button to block all forwarded traffic on a network interface
 - **Persistent state**: Block state survives service restarts via a YAML state file
@@ -26,25 +32,8 @@ go build -o nft-blocker .
 
 ## Configuration
 
-Create a `config.yaml`:
+Adapt `config.yaml` to your needs.
 
-```yaml
-password: "your-secret-password"
-listen: ":8081"
-interface: "br_lan"           # network interface for "block all" feature
-state_file: "state.yaml"     # where to persist block state
-
-groups:
-  kids:
-    display_name: "Kids Devices"
-    mac_addresses:
-      - "2C:98:11:1F:46:3D"
-      - "AA:BB:CC:DD:EE:FF"
-  guests:
-    display_name: "Guest Network"
-    mac_addresses:
-      - "11:22:33:44:55:66"
-```
 
 ### Config Fields
 

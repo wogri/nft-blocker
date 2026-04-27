@@ -14,9 +14,14 @@ type GroupState struct {
 	BlockedUntil *time.Time `yaml:"blocked_until,omitempty"`
 }
 
+type BlockAllState struct {
+	Blocked      bool       `yaml:"blocked"`
+	BlockedUntil *time.Time `yaml:"blocked_until,omitempty"`
+}
+
 type StateData struct {
 	Groups   map[string]*GroupState `yaml:"groups"`
-	BlockAll bool                   `yaml:"block_all"`
+	BlockAll BlockAllState          `yaml:"block_all"`
 }
 
 type State struct {
@@ -83,10 +88,13 @@ func (s *State) SetGroupBlocked(name string, blocked bool, until *time.Time) {
 	}
 }
 
-func (s *State) SetBlockAll(blocked bool) {
+func (s *State) SetBlockAll(blocked bool, until *time.Time) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.data.BlockAll = blocked
+	s.data.BlockAll = BlockAllState{
+		Blocked:      blocked,
+		BlockedUntil: until,
+	}
 }
 
 func (s *State) GetGroupState(name string) (blocked bool, until *time.Time) {
@@ -102,7 +110,14 @@ func (s *State) GetGroupState(name string) (blocked bool, until *time.Time) {
 func (s *State) IsBlockAll() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.data.BlockAll
+	return s.data.BlockAll.Blocked
+}
+
+func (s *State) GetBlockAllState() BlockAllState {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	cp := s.data.BlockAll
+	return cp
 }
 
 func (s *State) Snapshot() StateData {
@@ -114,8 +129,9 @@ func (s *State) Snapshot() StateData {
 		cp := *v
 		groups[k] = &cp
 	}
+	ba := s.data.BlockAll
 	return StateData{
 		Groups:   groups,
-		BlockAll: s.data.BlockAll,
+		BlockAll: ba,
 	}
 }
