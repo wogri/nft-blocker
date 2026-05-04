@@ -264,9 +264,9 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const REFRESH_INTERVAL = 10000;
 let authenticated = false;
 let statusData = null;
+let countdownInterval = null;
 
 // Toast
 function showToast(msg, isError) {
@@ -355,9 +355,9 @@ function renderDashboard() {
     blockAllDur.style.display = 'none';
     unblockBtn.style.display = '';
     if (statusData.block_all_until) {
-      const remaining = new Date(statusData.block_all_until) - Date.now();
-      blockAllCountdown.textContent = remaining > 0 ? formatDuration(remaining) : 'Expiring...';
+      blockAllCountdown.setAttribute('data-until', statusData.block_all_until);
     } else {
+      blockAllCountdown.removeAttribute('data-until');
       blockAllCountdown.textContent = 'Forever';
     }
   } else {
@@ -365,23 +365,20 @@ function renderDashboard() {
     blockAllDur.style.display = '';
     unblockBtn.style.display = 'none';
     blockAllCountdown.textContent = '';
+    blockAllCountdown.removeAttribute('data-until');
   }
 
   // Groups
   const container = document.getElementById('groups-container');
   container.innerHTML = '';
-  for (const g of statusData.groups) {
+  const sortedGroups = [...statusData.groups].sort((a, b) => a.display_name.localeCompare(b.display_name));
+  for (const g of sortedGroups) {
     const card = document.createElement('div');
     card.className = 'group-card' + (g.blocked ? ' blocked' : '');
 
     let countdownHtml = '';
     if (g.blocked && g.blocked_until) {
-      const remaining = new Date(g.blocked_until) - Date.now();
-      if (remaining > 0) {
-        countdownHtml = `<span class="countdown">${formatDuration(remaining)}</span>`;
-      } else {
-        countdownHtml = `<span class="countdown">Expiring...</span>`;
-      }
+      countdownHtml = `<span class="countdown" data-until="${esc(g.blocked_until)}"></span>`;
     } else if (g.blocked) {
       countdownHtml = `<span class="countdown">Forever</span>`;
     }
@@ -476,6 +473,22 @@ async function doUnblockAll() {
   } catch (e) { showToast(e.message, true); }
 }
 
+// Update all countdown elements every second based on their data-until attribute
+function tickCountdowns() {
+  document.querySelectorAll('[data-until]').forEach(el => {
+    const remaining = new Date(el.getAttribute('data-until')) - Date.now();
+    el.textContent = remaining > 0 ? formatDuration(remaining) : 'Expiring...';
+  });
+}
+
+// Refresh data when tab becomes visible
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && authenticated) refreshStatus();
+});
+window.addEventListener('focus', () => {
+  if (authenticated) refreshStatus();
+});
+
 // Init: try to fetch status. If it works, we're already authenticated (cookie).
 (async function init() {
   try {
@@ -486,7 +499,7 @@ async function doUnblockAll() {
   }
   showView();
   if (authenticated) renderDashboard();
-  setInterval(refreshStatus, REFRESH_INTERVAL);
+  countdownInterval = setInterval(tickCountdowns, 1000);
 })();
 </script>
 </body>
