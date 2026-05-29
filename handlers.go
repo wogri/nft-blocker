@@ -392,12 +392,21 @@ func (tm *TimerManager) Start(group string, duration time.Duration, fn func()) {
 	if existing, ok := tm.timers[group]; ok {
 		existing.Stop()
 	}
-	tm.timers[group] = time.AfterFunc(duration, func() {
-		fn()
+	var t *time.Timer
+	t = time.AfterFunc(duration, func() {
 		tm.mu.Lock()
+		// Check if this timer is still the active one for the group.
+		// If it was cancelled or replaced, do nothing.
+		current, ok := tm.timers[group]
+		if !ok || current != t {
+			tm.mu.Unlock()
+			return
+		}
 		delete(tm.timers, group)
 		tm.mu.Unlock()
+		fn()
 	})
+	tm.timers[group] = t
 }
 
 func (tm *TimerManager) Cancel(group string) {
